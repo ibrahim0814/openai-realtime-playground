@@ -250,8 +250,8 @@ export default function RealtimeInterface() {
           <h2 className="text-lg font-semibold mb-3">How to use the Voice Agent:</h2>
           <ol className="list-decimal list-inside space-y-2 text-sm text-gray-300">
             <li>Make sure you have set your OpenAI API key in the .env.local file</li>
-            <li>Click "Connect" to establish a connection to the Realtime API</li>
-            <li><strong>Voice Input:</strong> Click "Start Recording" and speak naturally - the assistant will respond with voice</li>
+            <li>Click &quot;Connect&quot; to establish a connection to the Realtime API</li>
+            <li><strong>Voice Input:</strong> Click &quot;Start Recording&quot; and speak naturally - the assistant will respond with voice</li>
             <li><strong>Text Input:</strong> Type a message and press Enter or click Send</li>
             <li>Watch the &ldquo;Live Transcription&rdquo; area for real-time speech-to-text</li>
             <li>View the conversation history to see the full dialogue</li>

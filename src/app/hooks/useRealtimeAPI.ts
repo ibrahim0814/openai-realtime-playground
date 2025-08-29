@@ -441,11 +441,15 @@ export function useRealtimeAPI() {
     source.buffer = audioBuffer;
     source.connect(playbackAudioContextRef.current.destination);
 
-    const playNext = () => {
-      setTimeout(() => playNextAudioBuffer(), 10); // Small delay to prevent audio gaps
+    source.onended = () => {
+      // Use setTimeout to avoid direct recursion in useCallback
+      setTimeout(() => {
+        if (playNextAudioBufferRef.current) {
+          playNextAudioBufferRef.current();
+        }
+      }, 10);
     };
 
-    source.onended = playNext;
     source.start();
     console.log('Playing audio chunk, duration:', audioBuffer.duration);
   }, []);
