@@ -37,6 +37,7 @@ export function useRealtimeAPI() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingRef = useRef(false);
+  const playAudioDeltaRef = useRef<((base64Audio: string) => void) | null>(null);
 
   // Create session and connect to WebSocket
   const connect = useCallback(async () => {
@@ -140,7 +141,10 @@ export function useRealtimeAPI() {
 
           case 'response.audio.delta':
             if (message.delta && typeof message.delta === 'string') {
-              playAudioDelta(message.delta);
+              // Use ref to avoid dependency cycle
+              if (playAudioDeltaRef.current) {
+                playAudioDeltaRef.current(message.delta);
+              }
             }
             break;
 
@@ -228,7 +232,7 @@ export function useRealtimeAPI() {
       console.error('Connection error:', err);
       setError(err instanceof Error ? err.message : 'Failed to connect');
     }
-  }, [currentResponse, playAudioDelta]);
+  }, [currentResponse]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -422,7 +426,6 @@ export function useRealtimeAPI() {
   }, [initializePlaybackAudioContext]);
 
   // Play the next audio buffer in the queue
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const playNextAudioBuffer = useCallback(async () => {
     if (!playbackAudioContextRef.current || audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
@@ -458,8 +461,11 @@ export function useRealtimeAPI() {
   }, []);
 
   // Initialize playNext function reference for recursive calls
-  const playNextAudioBufferRef = useRef<() => void>();
+  const playNextAudioBufferRef = useRef<() => void>(() => {});
   playNextAudioBufferRef.current = playNextAudioBuffer;
+
+  // Initialize playAudioDelta reference
+  playAudioDeltaRef.current = playAudioDelta;
 
   // Cleanup on unmount
   useEffect(() => {

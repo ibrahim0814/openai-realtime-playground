@@ -190,19 +190,20 @@ export default function RealtimeInterface() {
                   className="p-2 bg-gray-800 rounded border border-gray-700 text-xs font-mono"
                 >
                   <div className="text-blue-400 font-semibold">{msg.type}</div>
-                  {msg.type === 'response.text.delta' && msg.delta && typeof msg.delta === 'string' && (
-                    <div className="text-green-400 mt-1">{msg.delta}</div>
-                  )}
-                  {msg.type === 'conversation.item.created' && msg.item && typeof msg.item === 'object' && (
-                    <div className="text-yellow-400 mt-1">
-                      Role: {(msg.item as { role?: string }).role || 'unknown'}
-                    </div>
-                  )}
-                  {msg.error && typeof msg.error === 'object' && 'message' in msg.error && (
-                    <div className="text-red-400 mt-1">
-                      Error: {(msg.error as { message: string }).message}
-                    </div>
-                  )}
+                  {(() => {
+                    if (msg.type === 'response.text.delta' && msg.delta && typeof msg.delta === 'string') {
+                      return <div className="text-green-400 mt-1">{msg.delta}</div>;
+                    }
+                    if (msg.type === 'conversation.item.created' && msg.item && typeof msg.item === 'object') {
+                      const item = msg.item as { role?: string };
+                      return <div className="text-yellow-400 mt-1">Role: {item.role || 'unknown'}</div>;
+                    }
+                    if (msg.error && typeof msg.error === 'object' && 'message' in msg.error) {
+                      const error = msg.error as { message: string };
+                      return <div className="text-red-400 mt-1">Error: {error.message}</div>;
+                    }
+                    return null;
+                  })()}
                   <div className="text-gray-500 mt-1 text-xs">
                     {new Date().toLocaleTimeString()}
                   </div>
