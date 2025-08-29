@@ -3,13 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 interface RealtimeSession {
   apiKey: string;
   model: string;
-  config: any;
+  config: Record<string, unknown>;
 }
 
 interface RealtimeMessage {
   type: string;
   event_id?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ConversationItem {
@@ -74,7 +74,7 @@ export function useRealtimeAPI() {
       };
       
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
+        const message = JSON.parse(event.data) as RealtimeMessage;
         console.log('Received:', message);
         setMessages(prev => [...prev, message]);
 
@@ -113,17 +113,18 @@ export function useRealtimeAPI() {
 
           case 'conversation.item.created':
             console.log('Conversation item created:', message.item);
-            if (message.item) {
-              const content = message.item.content?.[0]?.text || 
-                            message.item.content?.[0]?.input_text || 
-                            message.item.content?.[0]?.transcript ||
-                            (message.item.role === 'user' ? 'Voice message' : '');
+            if (message.item && typeof message.item === 'object') {
+              const item = message.item as { id: string; role: string; content?: Array<{ text?: string; input_text?: string; transcript?: string }> };
+              const content = item.content?.[0]?.text || 
+                            item.content?.[0]?.input_text || 
+                            item.content?.[0]?.transcript ||
+                            (item.role === 'user' ? 'Voice message' : '');
               
               // Only add user messages immediately, assistant messages will be built from deltas
-              if (message.item.role === 'user' && content) {
+              if (item.role === 'user' && content) {
                 setConversation(prev => [...prev, {
-                  id: message.item.id,
-                  role: message.item.role,
+                  id: item.id,
+                  role: item.role as 'user' | 'assistant',
                   content: content,
                   timestamp: new Date()
                 }]);
@@ -138,19 +139,19 @@ export function useRealtimeAPI() {
             break;
 
           case 'response.audio.delta':
-            if (message.delta) {
+            if (message.delta && typeof message.delta === 'string') {
               playAudioDelta(message.delta);
             }
             break;
 
           case 'response.audio_transcript.delta':
-            if (message.delta) {
+            if (message.delta && typeof message.delta === 'string') {
               setCurrentResponse(prev => prev + message.delta);
             }
             break;
 
           case 'response.text.delta':
-            if (message.delta) {
+            if (message.delta && typeof message.delta === 'string') {
               setCurrentResponse(prev => prev + message.delta);
             }
             break;
@@ -165,8 +166,13 @@ export function useRealtimeAPI() {
 
           case 'response.audio_transcript.done':
             console.log('Audio transcript completed:', message.transcript);
-            if (message.transcript && !currentResponse.includes(message.transcript)) {
-              setCurrentResponse(prev => prev + message.transcript);
+            if (message.transcript && typeof message.transcript === 'string') {
+              setCurrentResponse(prev => {
+                if (!prev.includes(message.transcript as string)) {
+                  return prev + message.transcript;
+                }
+                return prev;
+              });
             }
             break;
 
@@ -175,29 +181,31 @@ export function useRealtimeAPI() {
             setTranscription('');
             setIsProcessing(false);
             
-            // Add the complete response to conversation if we have text
-            if (currentResponse.trim()) {
-              setConversation(prev => [...prev, {
-                id: message.response?.id || Date.now().toString(),
-                role: 'assistant',
-                content: currentResponse.trim(),
+            // Add the complete response to conversation
+            setConversation(prev => {
+              const responseId = typeof message.response === 'object' && message.response ? 
+                (message.response as { id?: string }).id || Date.now().toString() : 
+                Date.now().toString();
+              
+              const responseContent = currentResponse.trim() || '🔊 Audio response (no transcript available)';
+              
+              return [...prev, {
+                id: responseId,
+                role: 'assistant' as const,
+                content: responseContent,
                 timestamp: new Date()
-              }]);
-            } else {
-              // If no text transcript, add a placeholder for audio-only response
-              setConversation(prev => [...prev, {
-                id: message.response?.id || Date.now().toString(),
-                role: 'assistant',
-                content: '🔊 Audio response (no transcript available)',
-                timestamp: new Date()
-              }]);
-            }
+              }];
+            });
             setCurrentResponse('');
             break;
 
           case 'error':
             console.error('API Error:', message.error);
-            setError(`API Error: ${message.error.message}`);
+            if (message.error && typeof message.error === 'object' && 'message' in message.error) {
+              setError(`API Error: ${(message.error as { message: string }).message}`);
+            } else {
+              setError('API Error occurred');
+            }
             break;
 
           default:
@@ -220,7 +228,7 @@ export function useRealtimeAPI() {
       console.error('Connection error:', err);
       setError(err instanceof Error ? err.message : 'Failed to connect');
     }
-  }, []);
+  }, [currentResponse, playAudioDelta]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -234,6 +242,28 @@ export function useRealtimeAPI() {
     setIsConnected(false);
     setIsRecording(false);
   }, [isRecording]);
+
+  // Setup ScriptProcessor as fallback
+  const setupScriptProcessor = useCallback((source: MediaStreamAudioSourceNode) => {
+    const processor = audioContextRef.current!.createScriptProcessor(4096, 1, 1);
+
+    processor.onaudioprocess = (e) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const inputData = e.inputBuffer.getChannelData(0);
+        // Convert Float32Array to PCM16
+        const pcm16 = convertToPCM16(inputData);
+
+        // Send audio data to the API
+        wsRef.current.send(JSON.stringify({
+          type: 'input_audio_buffer.append',
+          audio: btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)))
+        }));
+      }
+    };
+
+    source.connect(processor);
+    processor.connect(audioContextRef.current!.destination);
+  }, []);
 
   // Start recording audio with optimized streaming
   const startRecording = useCallback(async () => {
@@ -272,8 +302,8 @@ export function useRealtimeAPI() {
 
           source.connect(processor);
           processor.connect(audioContextRef.current.destination);
-        } catch (workletError) {
-          console.warn('AudioWorklet not available, falling back to ScriptProcessor');
+        } catch (err) {
+          console.warn('AudioWorklet not available, falling back to ScriptProcessor:', err);
           setupScriptProcessor(source);
         }
       } else {
@@ -285,29 +315,7 @@ export function useRealtimeAPI() {
       console.error('Error starting recording:', err);
       setError('Failed to start recording');
     }
-  }, []);
-
-  // Setup ScriptProcessor as fallback
-  const setupScriptProcessor = useCallback((source: MediaStreamAudioSourceNode) => {
-    const processor = audioContextRef.current!.createScriptProcessor(4096, 1, 1);
-
-    processor.onaudioprocess = (e) => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Convert Float32Array to PCM16
-        const pcm16 = convertToPCM16(inputData);
-
-        // Send audio data to the API
-        wsRef.current.send(JSON.stringify({
-          type: 'input_audio_buffer.append',
-          audio: btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)))
-        }));
-      }
-    };
-
-    source.connect(processor);
-    processor.connect(audioContextRef.current!.destination);
-  }, []);
+  }, [setupScriptProcessor]);
 
   // Stop recording audio
   const stopRecording = useCallback(() => {
@@ -433,14 +441,18 @@ export function useRealtimeAPI() {
     source.buffer = audioBuffer;
     source.connect(playbackAudioContextRef.current.destination);
 
-    source.onended = () => {
-      // Play next buffer when current one ends
+    const playNext = () => {
       setTimeout(() => playNextAudioBuffer(), 10); // Small delay to prevent audio gaps
     };
 
+    source.onended = playNext;
     source.start();
     console.log('Playing audio chunk, duration:', audioBuffer.duration);
   }, []);
+
+  // Initialize playNext function reference for recursive calls
+  const playNextAudioBufferRef = useRef<() => void>();
+  playNextAudioBufferRef.current = playNextAudioBuffer;
 
   // Cleanup on unmount
   useEffect(() => {

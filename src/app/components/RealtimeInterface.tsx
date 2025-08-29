@@ -253,7 +253,7 @@ export default function RealtimeInterface() {
             <li>Click "Connect" to establish a connection to the Realtime API</li>
             <li><strong>Voice Input:</strong> Click "Start Recording" and speak naturally - the assistant will respond with voice</li>
             <li><strong>Text Input:</strong> Type a message and press Enter or click Send</li>
-            <li>Watch the "Live Transcription" area for real-time speech-to-text</li>
+            <li>Watch the &ldquo;Live Transcription&rdquo; area for real-time speech-to-text</li>
             <li>View the conversation history to see the full dialogue</li>
             <li>The assistant will automatically detect when you stop speaking and respond</li>
             <li>Check the technical events log for detailed API interactions</li>
