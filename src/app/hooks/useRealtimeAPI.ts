@@ -185,21 +185,28 @@ export function useRealtimeAPI() {
             setTranscription('');
             setIsProcessing(false);
             
-            // Add the complete response to conversation
-            setConversation(prev => {
-              const responseId = typeof message.response === 'object' && message.response ? 
-                (message.response as { id?: string }).id || Date.now().toString() : 
-                Date.now().toString();
-              
-              const responseContent = currentResponse.trim() || '🔊 Audio response (no transcript available)';
-              
-              return [...prev, {
-                id: responseId,
-                role: 'assistant' as const,
-                content: responseContent,
-                timestamp: new Date()
-              }];
-            });
+            // Only add to conversation if we have actual content and it's not already there
+            const trimmedResponse = currentResponse.trim();
+            if (trimmedResponse) {
+              setConversation(prev => {
+                const responseId = typeof message.response === 'object' && message.response ? 
+                  (message.response as { id?: string }).id || Date.now().toString() : 
+                  Date.now().toString();
+                
+                // Check if this response is already in conversation (avoid duplicates)
+                const lastMessage = prev[prev.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === trimmedResponse) {
+                  return prev; // Don't add duplicate
+                }
+                
+                return [...prev, {
+                  id: responseId,
+                  role: 'assistant' as const,
+                  content: trimmedResponse,
+                  timestamp: new Date()
+                }];
+              });
+            }
             setCurrentResponse('');
             break;
 
@@ -240,11 +247,26 @@ export function useRealtimeAPI() {
       wsRef.current.close();
       wsRef.current = null;
     }
+    
+    // Clean up media stream
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    
+    // Clean up audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
     }
+    
     setIsConnected(false);
     setIsRecording(false);
+    setError(null);
   }, [isRecording]);
 
   // Setup ScriptProcessor as fallback
@@ -323,6 +345,12 @@ export function useRealtimeAPI() {
 
   // Stop recording audio
   const stopRecording = useCallback(() => {
+    // Stop media stream tracks
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;

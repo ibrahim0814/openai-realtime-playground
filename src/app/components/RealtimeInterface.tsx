@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import * as React from 'react';
 import { useRealtimeAPI } from '../hooks/useRealtimeAPI';
 
 export default function RealtimeInterface() {
@@ -30,7 +31,7 @@ export default function RealtimeInterface() {
     }
   };
 
-  const handleConnect = async () => {
+  const handleConnect = React.useCallback(async () => {
     // Initialize audio context on user interaction (required by browsers)
     try {
       const audioContext = new AudioContext();
@@ -40,7 +41,17 @@ export default function RealtimeInterface() {
       console.warn('Could not initialize audio context:', err);
     }
     connect();
-  };
+  }, [connect]);
+
+  // Auto-connect on page load
+  React.useEffect(() => {
+    // Small delay to ensure component is mounted
+    const timer = setTimeout(() => {
+      handleConnect();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [handleConnect]); // Include handleConnect dependency
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
