@@ -412,7 +412,9 @@ export function useRealtimeAPI() {
 
       // Start playing if not already playing
       if (!isPlayingRef.current && audioQueueRef.current.length > 0) {
-        playNextAudioBuffer();
+        if (playNextAudioBufferRef.current) {
+          playNextAudioBufferRef.current();
+        }
       }
     } catch (err) {
       console.error('Error playing audio delta:', err);
@@ -420,6 +422,7 @@ export function useRealtimeAPI() {
   }, [initializePlaybackAudioContext]);
 
   // Play the next audio buffer in the queue
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const playNextAudioBuffer = useCallback(async () => {
     if (!playbackAudioContextRef.current || audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;

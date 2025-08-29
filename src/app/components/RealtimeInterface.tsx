@@ -190,17 +190,17 @@ export default function RealtimeInterface() {
                   className="p-2 bg-gray-800 rounded border border-gray-700 text-xs font-mono"
                 >
                   <div className="text-blue-400 font-semibold">{msg.type}</div>
-                  {msg.type === 'response.text.delta' && msg.delta && (
+                  {msg.type === 'response.text.delta' && msg.delta && typeof msg.delta === 'string' && (
                     <div className="text-green-400 mt-1">{msg.delta}</div>
                   )}
-                  {msg.type === 'conversation.item.created' && msg.item && (
+                  {msg.type === 'conversation.item.created' && msg.item && typeof msg.item === 'object' && (
                     <div className="text-yellow-400 mt-1">
-                      Role: {msg.item.role}
+                      Role: {(msg.item as { role?: string }).role || 'unknown'}
                     </div>
                   )}
-                  {msg.error && (
+                  {msg.error && typeof msg.error === 'object' && 'message' in msg.error && (
                     <div className="text-red-400 mt-1">
-                      Error: {msg.error.message}
+                      Error: {(msg.error as { message: string }).message}
                     </div>
                   )}
                   <div className="text-gray-500 mt-1 text-xs">
